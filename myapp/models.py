@@ -24,7 +24,7 @@ class Channel(models.Model):
 class Video(models.Model):
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE)
     title = models.CharField(max_length=300)
-    description = models.TextField(blank=True)
+    description = models.TextField()
     views = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
