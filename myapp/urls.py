@@ -20,4 +20,7 @@ urlpatterns = [
     path('videos/<int:pk>/like/delete/', views.LikeDeleteView.as_view()),
     path('comments/<int:pk>/', views.CommentDetailView.as_view()),
     path('comments/<int:pk>/delete/', views.CommentDeleteView.as_view()),
+    path('videos/<int:pk>/comments/', views.VideoCommentsCreateView.as_view()),
+    path('comments/<int:pk>/', views.CommentDeleteView.as_view()),
+    
 ]

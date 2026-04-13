@@ -45,7 +45,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
 
 class ChannelSerializer(serializers.ModelSerializer):
-    owner = UserSerializer(read_only=True)
+    owner_details = UserSerializer(source='owner', read_only=True)
     subscribers_count = serializers.SerializerMethodField()
 
     def get_subscribers_count(self, obj):
@@ -53,35 +53,26 @@ class ChannelSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Channel
-        fields = ['id', 'name', 'description', 'owner', 'subscribers_count', 'created_at']
+        fields = ['id', 'name', 'description', 'owner', 'owner_details', 'subscribers_count', 'created_at']
 
 
 
 class ChannelDetailSerializer(serializers.ModelSerializer):
-    owner = UserSerializer(read_only=True)
+    
+    owner_details = UserSerializer(source='owner', read_only=True)
     latest_videos = serializers.SerializerMethodField()
     total_views = serializers.SerializerMethodField()
 
     def get_latest_videos(self, obj):
-        videos = Video.objects.filter(channel=obj)
-        result = []
-        count = 0
-        for video in videos:
-            if count < 5:
-                result.append({'id': video.id, 'title': video.title, 'views': video.views})
-                count += 1
-        return result
+        videos = Video.objects.filter(channel=obj).order_by('-id')[:5]
+        return [{'id': v.id, 'title': v.title, 'views': v.views} for v in videos]
 
     def get_total_views(self, obj):
-        videos = Video.objects.filter(channel=obj)
-        total = 0
-        for video in videos:
-            total += video.views
-        return total
+        return Video.objects.filter(channel=obj).aggregate(models.Sum('views'))['views__sum'] or 0
 
     class Meta:
         model = Channel
-        fields = ['id', 'name', 'description', 'owner', 'latest_videos', 'total_views', 'created_at']
+        fields = ['id', 'name', 'description', 'owner', 'owner_details', 'latest_videos', 'total_views', 'created_at']
 
 
 class VideoSerializer(serializers.ModelSerializer):

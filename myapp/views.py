@@ -101,7 +101,7 @@ class VideoListView(ListCreateAPIView):
         search = self.request.query_params.get('search')
         if search:
             videos = videos.filter(title__icontains=search)
-
+  
         ordering = self.request.query_params.get('ordering', 'created_at')
         videos = videos.order_by(ordering)
 
@@ -113,7 +113,7 @@ class VideoDetailView(APIView):
         try:
             video = Video.objects.get(pk=pk)
         except Video.DoesNotExist:
-            return Response({'error': 'video not found'}, status=404)
+            return Response({'error': 'video not found'})
 
         video.views += 1
         video.save()
@@ -248,3 +248,4 @@ class LikeDeleteView(APIView):
         
         return Response({'liked': False, 'total_likes': Like.objects.filter(video=video).count()})
     
+
