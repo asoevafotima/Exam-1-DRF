@@ -63,13 +63,6 @@ class ChannelDetailSerializer(serializers.ModelSerializer):
     latest_videos = serializers.SerializerMethodField()
     total_views = serializers.SerializerMethodField()
 
-    def get_latest_videos(self, obj):
-        videos = Video.objects.filter(channel=obj).order_by('-id')[:5]
-        return [{'id': v.id, 'title': v.title, 'views': v.views} for v in videos]
-
-    def get_total_views(self, obj):
-        return Video.objects.filter(channel=obj).aggregate(models.Sum('views'))['views__sum'] or 0
-
     class Meta:
         model = Channel
         fields = ['id', 'name', 'description', 'owner', 'owner_details', 'latest_videos', 'total_views', 'created_at']
