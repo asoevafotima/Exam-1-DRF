@@ -10,6 +10,8 @@ urlpatterns = [
     path('channels/<int:pk>/delete/', views.ChannelDeleteView.as_view()),
     path('channels/<int:pk>/videos/', views.ChannelVideosView.as_view()),
     path('channels/<int:pk>/stats/', views.ChannelStatsView.as_view()),
+    path('videos/search/', views.VideoSearchView.as_view()), 
+    path('videos/top/', views.VideoTopView.as_view()),       
     path('videos/', views.VideoListView.as_view()),
     path('videos/<int:pk>/', views.VideoDetailView.as_view()),
     path('videos/<int:pk>/update/', views.VideoUpdateView.as_view()),
@@ -18,9 +20,11 @@ urlpatterns = [
     path('videos/<int:pk>/comments/create/', views.VideoCommentsCreateView.as_view()),
     path('videos/<int:pk>/like/', views.LikeCreateView.as_view()),
     path('videos/<int:pk>/like/delete/', views.LikeDeleteView.as_view()),
+    path('videos/<int:pk>/likes/', views.VideoLikesView.as_view()),
+    path('videos/<int:pk>/related/', views.VideoRelatedView.as_view()),
     path('comments/<int:pk>/', views.CommentDetailView.as_view()),
     path('comments/<int:pk>/delete/', views.CommentDeleteView.as_view()),
-    path('videos/<int:pk>/comments/', views.VideoCommentsCreateView.as_view()),
-    path('comments/<int:pk>/', views.CommentDeleteView.as_view()),
-    
+    path('stats/videos/', views.StatsVideosView.as_view()),
+    path('stats/users/', views.StatsUsersView.as_view()),
+    path('stats/channels/', views.StatsChannelsView.as_view()),
 ]
