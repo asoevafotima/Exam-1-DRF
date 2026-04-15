@@ -1,4 +1,5 @@
 from rest_framework.generics import ListCreateAPIView, RetrieveAPIView, ListAPIView, RetrieveUpdateAPIView
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import *
 from .serializers import *
 from .pagination import CustomPagination
@@ -31,20 +32,46 @@ class UserChannelsView(ListAPIView):
 
 class ChannelListView(ListCreateAPIView):
     serializer_class = ChannelSerializer
-    queryset = Channel.objects.all()
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [IsAuthenticated()]
+        return [AllowAny()]
+
+    def get_queryset(self):
+        return Channel.objects.all()
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
 
 
-class ChannelDetailView(RetrieveAPIView):
+class ChannelDetailView(RetrieveUpdateAPIView):
     serializer_class = ChannelDetailSerializer
     queryset = Channel.objects.all()
 
+    def get_permissions(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return [IsAuthenticated()]
+        return [AllowAny()]
+
+    def update(self, request, *args, **kwargs):
+        channel = self.get_object()
+        if channel.owner != request.user:
+            return Response({'error': 'not your channel'}, status=403)
+        return super().update(request, *args, **kwargs)
+
 
 class ChannelDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def delete(self, request, pk):
         try:
             channel = Channel.objects.get(pk=pk)
         except Channel.DoesNotExist:
             return Response({'error': 'channel not found'})
+
+        if channel.owner != request.user:
+            return Response({'error': 'not your channel'}, status=403)
 
         channel_id = channel.id
         channel.delete()
@@ -59,13 +86,11 @@ class ChannelVideosView(ListAPIView):
             return Video.objects.none()
         channel_id = self.kwargs['pk']
         videos = Video.objects.filter(channel_id=channel_id)
-
         sort = self.request.query_params.get('sort', 'latest')
         if sort == 'popular':
             videos = videos.order_by('-views')
         else:
             videos = videos.order_by('-created_at')
-
         return videos
 
 
@@ -99,26 +124,32 @@ class ChannelStatsView(APIView):
         })
 
 
+class MyChannelsView(ListAPIView):
+    serializer_class = ChannelSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Channel.objects.filter(owner=self.request.user)
+
 class VideoListView(ListCreateAPIView):
     serializer_class = VideoSerializer
     pagination_class = CustomPagination
 
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [IsAuthenticated()]
+        return [AllowAny()]
+
     def get_queryset(self):
         videos = Video.objects.all()
-
         search = self.request.query_params.get('search')
         if search:
             videos = videos.filter(title__icontains=search)
-
         channel_id = self.request.query_params.get('channel')
         if channel_id:
-            videos = videos.filter(channel_id=channel_id).order_by('-views')
-            return videos
-
+            return videos.filter(channel_id=channel_id).order_by('-views')
         ordering = self.request.query_params.get('ordering', 'created_at')
-        videos = videos.order_by(ordering)
-
-        return videos
+        return videos.order_by(ordering)
 
 
 class VideoDetailView(APIView):
@@ -131,13 +162,14 @@ class VideoDetailView(APIView):
         video.views += 1
         video.save()
 
-        comments_count = Comment.objects.filter(video=video).count()
+        comments = Comment.objects.filter(video=video)
         likes_count = Like.objects.filter(video=video).count()
+        comments_serializer = CommentSerializer(comments, many=True)
 
         serializer = VideoSerializer(video)
         return Response({
             **serializer.data,
-            'comments_count': comments_count,
+            'comments': comments_serializer.data,
             'likes_count': likes_count
         })
 
@@ -145,14 +177,26 @@ class VideoDetailView(APIView):
 class VideoUpdateView(RetrieveUpdateAPIView):
     serializer_class = VideoSerializer
     queryset = Video.objects.all()
+    permission_classes = [IsAuthenticated]
+
+    def update(self, request, *args, **kwargs):
+        video = self.get_object()
+        if video.channel.owner != request.user:
+            return Response({'error': 'not your video'}, status=403)
+        return super().update(request, *args, **kwargs)
 
 
 class VideoDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def delete(self, request, pk):
         try:
             video = Video.objects.get(pk=pk)
         except Video.DoesNotExist:
             return Response({'error': 'Video not found'})
+
+        if video.channel.owner != request.user:
+            return Response({'error': 'not your video'}, status=403)
 
         comments_count = Comment.objects.filter(video=video).count()
         likes_count = Like.objects.filter(video=video).count()
@@ -178,39 +222,30 @@ class VideoCommentsView(ListAPIView):
             return Comment.objects.none()
         video_id = self.kwargs['pk']
         comments = Comment.objects.filter(video_id=video_id)
-
         sort = self.request.query_params.get('sort', 'new')
         if sort == 'old':
             comments = comments.order_by('created_at')
         else:
             comments = comments.order_by('-created_at')
-
         return comments
 
 
 class VideoCommentsCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, pk):
         try:
             video = Video.objects.get(pk=pk)
         except Video.DoesNotExist:
             return Response({'error': 'video not found'})
 
-        user_id = request.data.get('user_id')
-        try:
-            user = User.objects.get(pk=user_id)
-        except User.DoesNotExist:
-            return Response({'error': 'user not found'})
-
         comment = Comment.objects.create(
             video=video,
-            user=user,
+            user=request.user,
             text=request.data.get('text')
         )
-
         serializer = CommentSerializer(comment)
-        data = serializer.data
-        data['video_id'] = video.id
-        return Response(data)
+        return Response(serializer.data)
 
 
 class CommentDetailView(APIView):
@@ -227,11 +262,16 @@ class CommentDetailView(APIView):
 
 
 class CommentDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def delete(self, request, pk):
         try:
             comment = Comment.objects.get(pk=pk)
         except Comment.DoesNotExist:
             return Response({'error': 'comment not found'})
+
+        if comment.user != request.user:
+            return Response({'error': 'not your comment'}, status=403)
 
         comment_id = comment.id
         comment.delete()
@@ -239,27 +279,34 @@ class CommentDeleteView(APIView):
 
 
 class LikeCreateView(APIView):
-    def post(self, request, pk):
-        video = Video.objects.get(pk=pk)
-        user_id = request.data.get('user_id')
+    permission_classes = [IsAuthenticated]
 
-        like = Like.objects.filter(video=video, user_id=user_id).first()
+    def post(self, request, pk):
+        try:
+            video = Video.objects.get(pk=pk)
+        except Video.DoesNotExist:
+            return Response({'error': 'video not found'})
+
+        like = Like.objects.filter(video=video, user=request.user).first()
         if like:
             return Response({'error': 'already liked'})
 
-        Like.objects.create(video=video, user_id=user_id)
+        Like.objects.create(video=video, user=request.user)
         return Response({'liked': True, 'total_likes': Like.objects.filter(video=video).count()})
 
 
 class LikeDeleteView(APIView):
-    def delete(self, request, pk):
-        video = Video.objects.get(pk=pk)
-        user_id = request.data.get('user_id')
+    permission_classes = [IsAuthenticated]
 
-        like = Like.objects.filter(video=video, user_id=user_id).first()
+    def delete(self, request, pk):
+        try:
+            video = Video.objects.get(pk=pk)
+        except Video.DoesNotExist:
+            return Response({'error': 'video not found'})
+
+        like = Like.objects.filter(video=video, user=request.user).first()
         if like:
             like.delete()
-
         return Response({'liked': False, 'total_likes': Like.objects.filter(video=video).count()})
 
 
@@ -291,7 +338,6 @@ class VideoSearchView(APIView):
 class VideoTopView(APIView):
     def get(self, request):
         videos = Video.objects.all()
-
         time_filter = request.query_params.get('time')
         if time_filter == 'day':
             videos = videos.filter(created_at__gte=timezone.now() - timedelta(days=1))
@@ -299,9 +345,8 @@ class VideoTopView(APIView):
             videos = videos.filter(created_at__gte=timezone.now() - timedelta(weeks=1))
         elif time_filter == 'month':
             videos = videos.filter(created_at__gte=timezone.now() - timedelta(days=30))
-
-        top_videos = videos.order_by('views')
-        serializer = VideoSerializer(top_videos, many=True)
+        videos = videos.order_by('views')
+        serializer = VideoSerializer(videos, many=True)
         return Response({'top_videos': serializer.data})
 
 

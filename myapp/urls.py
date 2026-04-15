@@ -27,4 +27,5 @@ urlpatterns = [
     path('stats/videos/', views.StatsVideosView.as_view()),
     path('stats/users/', views.StatsUsersView.as_view()),
     path('stats/channels/', views.StatsChannelsView.as_view()),
+    path('my/channels/', views.MyChannelsView.as_view()),
 ]
